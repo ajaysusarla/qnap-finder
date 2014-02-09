@@ -15,7 +15,6 @@
  * License along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
 #include "qnap-finder.h"
 
 #include <stdio.h>
@@ -23,179 +22,99 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
+
+#define DEBUG 1
+
+#ifdef DEBUG
+#define D(x) x
+#else
+#define D(x)
+#endif
+
+#define BROADCAST_IP    "255.255.255.255"
+#define BROADCAST_PORT  8097
+#define MAX_PACKET_SIZE 1000
+
+#define HASH_TABLE_LEN  2000
+#define HASH_KEY        997
 
 
-/* socket descriptors  */
+typedef enum {
+	MESSAGE_TYPE_QUERY,
+	MESSAGE_TYPE_DETAIL
+} message_type_t;
+
+message_type_t mtype;
+
+struct QNAPQueryReplyPacket {
+	char data[334];
+};
+
+/* Globals */
 int sendsock;
 int recvsock;
 
 struct sockaddr_in broadcast_addr;
+int send_done = 0;
 
-/* Request Messages */
-char msg0[] = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x43, 0x6c,
-	0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char msg1[] = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x43, 0x6c,
-	0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char msg2[] = {
-	0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c,
-	0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char msg3[] = {
-	0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c,
-	0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char msg4[] = {
-	0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c,
-	0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char msg5[] = {
-	0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c,
-	0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
+/* hastable */
+in_addr_t add_tab[HASH_TABLE_LEN] = { 0 };
 
-/* Full list of messages
-char peer0_0[] = {
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x43, 0x6c, 
-0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_1[] = {
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x43, 0x6c, 
-0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_2[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_3[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_4[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_5[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_6[] = {
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x43, 0x6c, 
-0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_7[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_8[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_9[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_10[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_11[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_12[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_13[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
-char peer0_14[] = {
-0x00, 0x08, 0x9b, 0xc3, 0xec, 0x6a, 0x43, 0x6c, 
-0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x25, 0x04 };
- */
-#define BROADCAST_IP   "255.255.255.255"
-#define BROADCAST_PORT 8097
-#define MAX_PACKET_SIZE 5000
 
-void broadcast_udp_msg(void *msg, int msg_len)
+int get_and_stash_local_ip_addr(void)
 {
-	int sockfd;
-	struct sockaddr_in broadcast_addr;
-	char *broadcast_ip;
-	unsigned short broadcast_port;
-	int broadcast = 1;
-	int loop = 1;
-	int bytes_sent;
+	struct ifaddrs *ifaddr, *ifa;
 
-	broadcast_ip = BROADCAST_IP;
-	broadcast_port = BROADCAST_PORT;
-
-	/* Create a socket datagram */
-	sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sockfd < 0) {
-		fprintf(stderr, "could not create socket!\n");
-		perror("socket");
-		exit(EXIT_FAILURE);
-	}
-
-	/* Initialize the broadcast socket addr */
-	memset(&broadcast_addr, 0, sizeof(broadcast_addr));
-	broadcast_addr.sin_family = AF_INET;
-	broadcast_addr.sin_addr.s_addr = inet_addr(broadcast_ip);
-	broadcast_addr.sin_port = htons(broadcast_port);
-
-	/* Set broadcast on socket */
-	if (setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, (void *)&broadcast, sizeof(broadcast)) < 0) {
-		fprintf(stderr, "could not set socket option SO_BROADCAST!\n");
-		perror("setsockopt");
-		close(sockfd);
-		exit(EXIT_FAILURE);
-	}
-
-	/* Disable loopback so that we don't receieve our own datagrams */
-	if (setsockopt(sockfd, IPPROTO_IP, IP_MULTICAST_LOOP, (void *)&loop, sizeof(loop)) < 0) {
-		fprintf(stderr, "could not set socket option IP_MULTICAST_LOOP!\n");
-		perror("setsockopt");
-		close(sockfd);
-		exit(EXIT_FAILURE);
-	}
-
-	/* Send the message to the multicast group */
-	bytes_sent = sendto(sockfd, msg, msg_len, 0,
-			    (struct sockaddr *)&broadcast_addr,
-			    sizeof(broadcast_addr));
-
-	if (bytes_sent != msg_len) {
-		fprintf(stderr, "sendto failed!\n");
-		perror("sendto");
-		close(sockfd);
-		exit(EXIT_FAILURE);
-	}
-
-	fprintf(stdout, "message sent:%d\n", bytes_sent);
-}
-
-/*
-int main(int argc, char **argv)
-{
-	broadcast_udp_msg(msg0, 16); // Initial list
-	broadcast_udp_msg(msg2, 16); // Complete info
-	exit(EXIT_SUCCESS);
-}
-*/
-
-int send_query(void)
-{
-	int num;
-	int msg_len = 16;
-
-	printf("-->send_query\n");
-	/* Send the message to the multicast group */
-	num = sendto(sendsock, msg0, msg_len, 0,
-		     (struct sockaddr *)&broadcast_addr,
-		     sizeof(broadcast_addr));
-
-	if (num != msg_len) {
-		fprintf(stderr, "sendto failed!\n");
-		perror("sendto");
+	if (getifaddrs(&ifaddr) == -1) {
+		perror("getifaddrs");
 		return -1;
 	}
 
-	printf("-->exit send_query\n");
+	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+		if (ifa->ifa_addr == NULL)
+			continue;
+
+		if (ifa->ifa_addr->sa_family == AF_INET) {
+			int pos;
+			in_addr_t addr;
+			struct sockaddr_in *sin = (struct sockaddr_in *)ifa->ifa_addr;
+
+			addr = sin->sin_addr.s_addr;
+			pos = addr % HASH_KEY;
+
+			add_tab[pos] = addr;
+		}
+	}
+
+	freeifaddrs(ifaddr);
+
 	return 0;
 }
 
-void process_recv_data(void)
+int send_msg(message_type_t type, char *data, int len)
+{
+	int num;
+	D(printf("-->send_msg\n");)
+	num = sendto(sendsock, data, len, 0,
+		     (struct sockaddr *)&broadcast_addr,
+		     sizeof(broadcast_addr));
+
+	D(printf("-->exit send_msg\n");)
+	if (num != len) {
+		perror("sendto");
+		return -1;
+	} else
+		return 0;
+}
+
+void *recv_func(void *arg)
 {
 	char data[MAX_PACKET_SIZE];
 	char hostip[INET_ADDRSTRLEN];
@@ -204,76 +123,36 @@ void process_recv_data(void)
 	socklen_t fromsockaddrsize;
 	int ret;
 
-	printf("-->process_recv_data\n");
+	D(printf("-->recv_func\n");)
 
 	fromsockaddrsize = sizeof (struct sockaddr_in);
 
-	ret = recvfrom(recvsock, data, MAX_PACKET_SIZE, 0,
-		       fromsockaddr, &fromsockaddrsize);
+	while (!send_done) {
+		int pos;
+		in_addr_t addr;
 
-	inet_ntop(AF_INET, &(fromsockaddr_struct.sin_addr), hostip, INET_ADDRSTRLEN);
-	printf("Received %d bytesfrom %s.\n", ret, hostip);
-	printf("========================\n");
-	//fwrite(data, MAX_PACKET_SIZE, 1, stdout);
-	printf("\n========================\n");
+		sleep(1);
+		memset(&data, 0, MAX_PACKET_SIZE);
 
-	printf("-->exit process_recv_data\n");
+		D(printf("\t-->recvfrom\n");)
+		ret = recvfrom(recvsock, data, MAX_PACKET_SIZE, 0,
+			       fromsockaddr, &fromsockaddrsize);
 
-}
-
-void loop(void)
-{
-	fd_set readfd;
-	fd_set writefd;
-	int netfd;
-	int maxfd = 0;
-	int readwrite = 0;
-	struct timeval selecttime;
-	int rv;
-	int i = 0;
-
-	printf("-->loop\n");
-
-	while (i++ < 100) {
-		FD_ZERO(&readfd);
-		FD_ZERO(&writefd);
-
-		maxfd = 0;
-
-		netfd = recvsock;
-		FD_SET(netfd, &readfd);
-		if(netfd >= maxfd)
-			maxfd = netfd + 1;
-
-		do {
-			/* selec timeout 0.1s */
-			selecttime.tv_sec = 0;
-			selecttime.tv_usec = 1000000;
-
-			if(readwrite) {
-				rv = select(maxfd, (void *)&readfd,
-					    &writefd, NULL, &selecttime);
-			} else {
-				rv = select(maxfd, (void *)&readfd,
-					    NULL, NULL, &selecttime);
-			}
-		} while((rv < 0) && (errno == EINTR));
-
-		if(rv < 0) {
-			perror("select");
-			exit(EXIT_FAILURE);
+		addr = fromsockaddr_struct.sin_addr.s_addr;
+		pos = addr % HASH_KEY;
+		inet_ntop(AF_INET, &(fromsockaddr_struct.sin_addr), hostip, INET_ADDRSTRLEN);
+		if (add_tab[pos] == 0) {
+			add_tab[pos] = addr;
+			printf("Received %d bytesfrom %s.\n", ret, hostip);
+			printf("========================\n");
+			fwrite(data, MAX_PACKET_SIZE, 1, stdout);
+			//printf("\n========================\n");
 		}
-
-		readwrite = 0;
-
-		if (FD_ISSET(netfd, &readfd)) {
-			process_recv_data();
-			readwrite = 1;
-		}
-
-		send_query();
 	}
-	printf("-->exit loop\n");
+
+	D(printf("-->exit recv_func\n");)
+
+	return NULL;
 }
 
 int net_init(char *broadcast_ip, unsigned short broadcast_port)
@@ -283,7 +162,7 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	int loop = 1;
 	struct sockaddr_in si_me;
 
-	printf("-->net_init\n");
+	D(printf("-->net_init\n");)
 
 	/** Sending socket **/
 	sendsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -302,7 +181,7 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	rv = setsockopt(sendsock, SOL_SOCKET, SO_BROADCAST, (void *)&bcast, sizeof(bcast));
 	if (rv < 0){
 		perror("setsockopt");
-		return -1;
+return -1;
 	}
 
 	/* Disable loopback so that we don't receieve our own datagrams */
@@ -339,28 +218,65 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	si_me.sin_addr.s_addr = INADDR_ANY;
 	bind(recvsock, (struct sockaddr *)&si_me, sizeof(struct sockaddr));
 
-	printf("-->exit net_init\n");
+	D(printf("-->exit net_init\n");)
 	return 0;
 }
 
 void net_fin(void)
 {
-	printf("-->net_fin\n");
+	D(printf("-->net_fin\n");)
 	if (sendsock >= 0)
 		close(sendsock);
 	if (recvsock >= 0)
 		close(recvsock);
 
-	printf("-->exit net_fin\n");
+	D(printf("-->exit net_fin\n");)
 }
 
 int main(int argc, char **argv)
 {
-	printf("-->main\n");
-	net_init(BROADCAST_IP, BROADCAST_PORT);
-	loop();
+	pthread_t recv_thread;
+	int ret;
+
+
+	get_and_stash_local_ip_addr();
+
+	net_init(BROADCAST_IP,BROADCAST_PORT);
+
+	/* create recv_thread first */
+	ret = pthread_create(&recv_thread, NULL, recv_func, NULL);
+	if (ret) {
+		fprintf(stderr, "Error: pthread_create(recv_func): %d\n", ret);
+		ret = EXIT_FAILURE;
+		goto cleanup;
+	}
+
+	/* Send query msg */
+	send_msg(MESSAGE_TYPE_QUERY, msg[0], SEND_MESG_LEN);
+
+	if (pthread_join(recv_thread, NULL)) {
+		fprintf(stderr, "error joining thread recv_thread\n");
+		ret = EXIT_FAILURE;
+		goto cleanup;
+	}
+
+	/* Process data here??? */
+
+
+	ret = EXIT_SUCCESS;
+
+cleanup:
 	net_fin();
 
-	printf("-->exit main\n");
-	exit(EXIT_SUCCESS);
+	exit(ret);
+
 }
+
+/*
+  header: 00 08 9b c3 ec 6a 53 65  01 00 01 00 00 00 25 04 [query]
+          00 08 9b c3 ec 6a 53 65  01 00 05 00 00 00 25 04 [detail]
+
+  footer: ff 04 00 00 00 00 [query]
+          ff 04 00 00 00 00 [detail]
+
+ */
