@@ -39,13 +39,40 @@ querying further, with the following data:
 000000D0  00 08 9b c3 ec 6a 43 6c  02 00 05 00 00 00 25 04 .....jCl ......%.
 000000E0  00 08 9b c3 ec 6a 43 6c  02 00 05 00 00 00 25 04 .....jCl ......%.
 
-I haven't figured out the difference between the message:
+There are two kinds of messages that are sent:
+
+* MSG 1:
 
 00000000  00 00 00 00 00 00 43 6c  00 00 01 00 00 00 25 04 ......Cl ......%.
 
-and
+This is a query of sorts. When sent, the NAS box responds with a brief message:
+
+���jSe%��
+10.0.0.10cher	NAS(TS-410)TS-419ITS-410�	1�	2�	3�	)����@�2-	20130726�	' 
+                                                                                                              admin5��H�	P�	��	��  �
+                                                                                                                                                                  �	�	�	�	�	�+smtp.gmail.com:465F
+                                      ���j���k�	
+
+
+
+* MSG 2:
 
 00000020  00 08 9b c3 ec 6a 43 6c  02 00 05 00 00 00 25 04 .....jCl ......%.
+
+This requests for more detailed information from the NAS box:
+���jSe%cher(TS-410)TS-419ITS-410	NAS�	' @�2-	20130726�	1�	2�	3L--!@(GMT+10:00) Canberra, Melbourne, Sydney
+
+���
+      ���j�	�+,�	�
+��	�FG
+                �	��	��5�0bond���j
+                                                 
+���
+����k#437%1&Seagate ST31000528AS    CC38'
+931.51 GB.Seagate ST31000528AS    CC38/
+931.51 GB:Seagate ST31000528AS    CC38;
+931.51 GB<Seagate ST31000528AS    CC38=
+931.51 GB�	
 
 
 Both the messages are 16 bytes long.
@@ -55,7 +82,6 @@ I used tcpdump to capture data from my linux box:
 # tcpdump -vvv -i wlan0 -w cap_from_linux.pcap -n "broadcast or multicast"
 
 Please find the file `cap_from_linux.pcap` in the repository.
-
 
 
 
