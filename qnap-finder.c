@@ -15,7 +15,6 @@
  * License along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-#include "qnap-finder.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,10 +29,13 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
+#include "qnap-finder.h"
+#include "list.h"
+
 #define DEBUG 1
 
 #ifdef DEBUG
-#define D(x) x
+#define D(x) printf(x)
 #else
 #define D(x)
 #endif
@@ -45,21 +47,21 @@
 #define HASH_TABLE_LEN  2000
 #define HASH_KEY        997
 
-
-typedef enum {
-	MESSAGE_TYPE_QUERY,
-	MESSAGE_TYPE_DETAIL
-} message_type_t;
-
-message_type_t mtype;
-
-struct QNAPQueryReplyPacket {
-	char data[334];
+/* QNAP Response */
+struct qnap_response_hdr {
+	uint64_t magic[2];
+#define QNAP_MAGIC1 0x65536AECC39B0800
+#define QNAP_MAGIC2 0x0425000000010001 /* basic */
+#define QNAP_MAGIC3 0x0425000000050001 /* detail */
 };
+
+#define QNAP_PACKET_UNPACK(a) \
+	(void)memcpy((a), &buf[len], sizeof(a)), len += sizeof(a)
 
 /* Globals */
 int sendsock;
 int recvsock;
+LIST *response_list;
 
 struct sockaddr_in broadcast_addr;
 int send_done = 0;
@@ -68,10 +70,70 @@ int send_done = 0;
 in_addr_t add_tab[HASH_TABLE_LEN] = { 0 };
 
 
+/* Endianness */
+static union {
+	char s[4];
+	uint32_t u;
+} endian_data;
+
+/* short */
+static uint16_t _data_to_le2(uint16_t in)
+{
+	uint16_t out;
+	uint8_t *s = (uint8_t *)(void *)&in;
+	uint8_t *d = (uint8_t *)(void *)&out;
+
+	d[0] = s[1];
+	d[1] = s[0];
+
+	return out;
+}
+
+/* int */
+static uint32_t _data_to_le4(uint32_t in)
+{
+	uint32_t out;
+	uint8_t *s = (uint8_t *)(void *)&in;
+	uint8_t *d = (uint8_t *)(void *)&out;
+
+	d[0] = s[3];
+	d[1] = s[2];
+	d[2] = s[1];
+	d[3] = s[0];
+
+	return out;
+}
+
+/* long */
+static uint64_t _data_to_le8(uint64_t in)
+{
+	uint64_t out;
+	uint8_t *s = (uint8_t *)(void *)&in;
+	uint8_t *d = (uint8_t *)(void *)&out;
+
+	d[0] = s[7];
+	d[1] = s[6];
+	d[2] = s[5];
+	d[3] = s[4];
+	d[4] = s[3];
+	d[5] = s[2];
+	d[6] = s[1];
+	d[7] = s[0];
+
+	return out;
+}
+
+#define SWAP_DATA (endian_data.u == (uint32_t)0x01020304)
+#define DATA_TO_LE8(x) ((uint64_t)(SWAP_DATA ? _data_to_le8(x) : (uint64_t)(x)))
+#define DATA_TO_LE4(x) ((uint32_t)(SWAP_DATA ? _data_to_le4(x) : (uint32_t)(x)))
+#define DATA_TO_LE2(x) ((uint16_t)(SWAP_DATA ? _data_to_le2(x) : (uint16_t)(x)))
+
+
 int get_and_stash_local_ip_addr(void)
 {
 	struct ifaddrs *ifaddr, *ifa;
 
+	D("-->get_and_stash_local_ip_addr\n");
 	if (getifaddrs(&ifaddr) == -1) {
 		perror("getifaddrs");
 		return -1;
@@ -95,18 +157,19 @@ int get_and_stash_local_ip_addr(void)
 
 	freeifaddrs(ifaddr);
 
+	D("-->exit get_and_stash_local_ip_addr\n");
 	return 0;
 }
 
-int send_msg(message_type_t type, char *data, int len)
+int send_msg(char *data, int len)
 {
 	int num;
-	D(printf("-->send_msg\n");)
+	D("-->send_msg\n");
 	num = sendto(sendsock, data, len, 0,
 		     (struct sockaddr *)&broadcast_addr,
 		     sizeof(broadcast_addr));
 
-	D(printf("-->exit send_msg\n");)
+	D("-->exit send_msg\n");
 	if (num != len) {
 		perror("sendto");
 		return -1;
@@ -123,34 +186,75 @@ void *recv_func(void *arg)
 	socklen_t fromsockaddrsize;
 	int ret;
 
-	D(printf("-->recv_func\n");)
+	D("-->recv_func\n");
+
+	(void)memcpy(endian_data.s, "\01\02\03\04", 4);
 
 	fromsockaddrsize = sizeof (struct sockaddr_in);
 
 	while (!send_done) {
 		int pos;
 		in_addr_t addr;
+		NODE *node;
 
 		sleep(1);
-		memset(&data, 0, MAX_PACKET_SIZE);
 
-		D(printf("\t-->recvfrom\n");)
+		memset(&data, 0, MAX_PACKET_SIZE);
+		memset(&hostip, 0, INET_ADDRSTRLEN);
+
+		node = create_node();
+
+		D("\t-->recvfrom\n");
 		ret = recvfrom(recvsock, data, MAX_PACKET_SIZE, 0,
 			       fromsockaddr, &fromsockaddrsize);
 
 		addr = fromsockaddr_struct.sin_addr.s_addr;
 		pos = addr % HASH_KEY;
 		inet_ntop(AF_INET, &(fromsockaddr_struct.sin_addr), hostip, INET_ADDRSTRLEN);
+
+		node->len = ret;
+		node->addr = addr;
+		node->hostip = strdup(hostip);
+		node->msg = (char *)malloc(ret);
+		memcpy(node->msg, data, ret);
+
 		if (add_tab[pos] == 0) {
-			add_tab[pos] = addr;
-			printf("Received %d bytesfrom %s.\n", ret, hostip);
-			printf("========================\n");
-			fwrite(data, MAX_PACKET_SIZE, 1, stdout);
+			struct qnap_response_hdr h;
+			char *buf;
+			size_t len = 0;
+
+			buf = data;
+
+			QNAP_PACKET_UNPACK(h.magic);
+			h.magic[0] = DATA_TO_LE8(h.magic[0]);
+			h.magic[1] = DATA_TO_LE8(h.magic[1]);
+
+			if (h.magic[0] == QNAP_MAGIC1) {
+				if (h.magic[1] == QNAP_MAGIC2) {
+					D("\t\t-->It is a Query reponse.\n");
+				} else if (h.magic[1] == QNAP_MAGIC3) {
+					D("\t\t-->It is a Detail reponse.\n");
+				} else {
+					D("\t\t-->Nothing?\n");
+				}
+			} else {
+				fprintf(stderr, "Not a QNAP response\n");
+			}
+			/*
+			printf("0x%llx:0x%llx\n",
+			       (unsigned long long)h.magic[0],
+			       (unsigned long long)h.magic[1]);
+			*/
+			/*
+			D(printf("Received %d bytesfrom %s.\n", ret, hostip););
+			//fwrite(data, MAX_PACKET_SIZE, 1, stdout);
 			//printf("\n========================\n");
+			*/
+			//add_tab[pos] = addr; /* Add to hash table */
 		}
 	}
 
-	D(printf("-->exit recv_func\n");)
+	D("-->exit recv_func\n");
 
 	return NULL;
 }
@@ -162,7 +266,7 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	int loop = 1;
 	struct sockaddr_in si_me;
 
-	D(printf("-->net_init\n");)
+	D("-->net_init\n");
 
 	/** Sending socket **/
 	sendsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -218,19 +322,19 @@ return -1;
 	si_me.sin_addr.s_addr = INADDR_ANY;
 	bind(recvsock, (struct sockaddr *)&si_me, sizeof(struct sockaddr));
 
-	D(printf("-->exit net_init\n");)
+	D("-->exit net_init\n");
 	return 0;
 }
 
 void net_fin(void)
 {
-	D(printf("-->net_fin\n");)
+	D("-->net_fin\n");
 	if (sendsock >= 0)
 		close(sendsock);
 	if (recvsock >= 0)
 		close(recvsock);
 
-	D(printf("-->exit net_fin\n");)
+	D("-->exit net_fin\n");
 }
 
 int main(int argc, char **argv)
@@ -238,6 +342,10 @@ int main(int argc, char **argv)
 	pthread_t recv_thread;
 	int ret;
 
+
+	D("-->main\n");
+
+	response_list = create_list();
 
 	get_and_stash_local_ip_addr();
 
@@ -251,8 +359,11 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Send query msg */
-	send_msg(MESSAGE_TYPE_QUERY, msg[0], SEND_MESG_LEN);
+	/* request query packet */
+	send_msg(msg[0], SEND_MESG_LEN);
+
+	/* request detail packet */
+	send_msg(msg[2], SEND_MESG_LEN);
 
 	if (pthread_join(recv_thread, NULL)) {
 		fprintf(stderr, "error joining thread recv_thread\n");
@@ -267,16 +378,9 @@ int main(int argc, char **argv)
 
 cleanup:
 	net_fin();
+	free_list(response_list);
 
+	D("-->exit main\n");
 	exit(ret);
 
 }
-
-/*
-  header: 00 08 9b c3 ec 6a 53 65  01 00 01 00 00 00 25 04 [query]
-          00 08 9b c3 ec 6a 53 65  01 00 05 00 00 00 25 04 [detail]
-
-  footer: ff 04 00 00 00 00 [query]
-          ff 04 00 00 00 00 [detail]
-
- */
