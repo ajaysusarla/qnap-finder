@@ -84,6 +84,18 @@ I used tcpdump to capture data from my linux box:
 Please find the file `cap_from_linux.pcap` in the repository.
 
 
+* Header and Footer of the response
+===================================
+
+* Response Header: The header is a 128 bit message.
+  The 'query' response header is:
+      00 08 9b c3 ec 6a 53 65  01 00 01 00 00 00 25 04
+  The 'detail' response header is:
+      00 08 9b c3 ec 6a 53 65  01 00 05 00 00 00 25 04
+
+* Response Footer: The footer(96 bits) is the same for both kinds of messages:
+      ff 04 00 00 00 00
+
 
 * Comments, bugs and patches
 ============================
