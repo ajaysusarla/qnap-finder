@@ -53,6 +53,7 @@ void free_list(LIST *list)
 				free(prev->msg);
 			free(prev);
 		}
+		free(tmp);
 		list->first = NULL;
 		list->last = NULL;
 

@@ -31,7 +31,7 @@ typedef struct _QnapResponseNode {
 	in_addr_t addr;
 	node_type_t ntype;
 	char *hostip;
-	char *msg;
+	unsigned char *msg;
 	struct _QnapResponseNode *next;
 } NODE;
 
