@@ -28,11 +28,12 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#include <limits.h>
 
 #include "qnap-finder.h"
 #include "list.h"
 
-#define DEBUG 1
+//#define DEBUG
 
 #ifdef DEBUG
 #define D(x) printf(x)
@@ -47,6 +48,9 @@
 #define HASH_TABLE_LEN  2000
 #define HASH_KEY        997
 
+#define FALSE 0
+#define TRUE  1
+
 /* QNAP Response */
 struct qnap_response_hdr {
 	uint64_t magic[2];
@@ -57,6 +61,7 @@ struct qnap_response_hdr {
 
 #define QNAP_PACKET_UNPACK(a) \
 	(void)memcpy((a), &buf[len], sizeof(a)), len += sizeof(a)
+
 
 /* Globals */
 int sendsock;
@@ -69,6 +74,7 @@ int send_done = 0;
 /* hastable */
 in_addr_t add_tab[HASH_TABLE_LEN] = { 0 };
 
+/* Offsets in bytes */
 
 /* Endianness */
 static union {
@@ -203,6 +209,7 @@ void *recv_func(void *arg)
 		memset(&hostip, 0, INET_ADDRSTRLEN);
 
 		node = create_node();
+		node->ntype = NODE_TYPE_NONE;
 
 		D("\t-->recvfrom\n");
 		ret = recvfrom(recvsock, data, MAX_PACKET_SIZE, 0,
@@ -211,12 +218,6 @@ void *recv_func(void *arg)
 		addr = fromsockaddr_struct.sin_addr.s_addr;
 		pos = addr % HASH_KEY;
 		inet_ntop(AF_INET, &(fromsockaddr_struct.sin_addr), hostip, INET_ADDRSTRLEN);
-
-		node->len = ret;
-		node->addr = addr;
-		node->hostip = strdup(hostip);
-		node->msg = (char *)malloc(ret);
-		memcpy(node->msg, data, ret);
 
 		if (add_tab[pos] == 0) {
 			struct qnap_response_hdr h;
@@ -232,25 +233,33 @@ void *recv_func(void *arg)
 			if (h.magic[0] == QNAP_MAGIC1) {
 				if (h.magic[1] == QNAP_MAGIC2) {
 					D("\t\t-->It is a Query reponse.\n");
+					node->ntype = NODE_TYPE_BRIEF;
 				} else if (h.magic[1] == QNAP_MAGIC3) {
 					D("\t\t-->It is a Detail reponse.\n");
+					node->ntype = NODE_TYPE_BRIEF;
 				} else {
 					D("\t\t-->Nothing?\n");
 				}
 			} else {
 				fprintf(stderr, "Not a QNAP response\n");
 			}
-			/*
-			printf("0x%llx:0x%llx\n",
-			       (unsigned long long)h.magic[0],
-			       (unsigned long long)h.magic[1]);
-			*/
-			/*
-			D(printf("Received %d bytesfrom %s.\n", ret, hostip););
-			//fwrite(data, MAX_PACKET_SIZE, 1, stdout);
-			//printf("\n========================\n");
-			*/
-			//add_tab[pos] = addr; /* Add to hash table */
+
+			if (node->ntype != NODE_TYPE_NONE) {
+				node->len = ret;
+				node->addr = addr;
+				node->hostip = strdup(hostip);
+				node->msg = (unsigned char *)malloc(ret);
+				node->msg = memcpy(node->msg, data, ret);
+				add_node(response_list, node);
+			} else {
+				free(node);
+			}
+
+			D("0x%llx:0x%llx\n",
+			  (unsigned long long)h.magic[0],
+			  (unsigned long long)h.magic[1]);
+
+			add_tab[pos] = addr; /* Add to hash table */
 		}
 	}
 
@@ -337,6 +346,73 @@ void net_fin(void)
 	D("-->exit net_fin\n");
 }
 
+
+#define QNAP_FIELD_HOSTNAME  01
+
+#define QNAP_BRIEF_HOSTNAME_LEN 34
+#define QNAP_BRIEF_HOSTNAME     35
+
+void parse_brief_response(unsigned char *resp, int len, char *hostip)
+{
+	int hostname_len;
+	char hostname[HOST_NAME_MAX] = { 0 };
+	int i;
+
+	hostname_len = resp[QNAP_BRIEF_HOSTNAME_LEN];
+	(void)memcpy(hostname, resp+QNAP_BRIEF_HOSTNAME, hostname_len);
+
+	fprintf(stdout, "\tHostname    : %s\n", hostname);
+	fprintf(stdout, "\tIP Address  : %s\n", hostip);
+
+	i = QNAP_BRIEF_HOSTNAME + hostname_len + 2;
+
+	fprintf(stdout, "\tType        : ");
+	while (1) {
+		fprintf(stdout, "%c", resp[i]);
+		i++;
+		if (resp[i] == 202 && resp[i+1] == 9) /* check for 0xca 0x09*/
+			break;
+	}
+	fprintf(stdout, "\n");
+
+	fprintf(stdout, "\tURL         : https:///\n");
+
+	return;
+}
+
+void parse_detail_response(unsigned char *resp, int len, char *hostip)
+{
+	return;
+}
+
+void print_qnap_list(LIST *list)
+{
+	NODE *node;
+	int count = 0;
+
+	if (!list)
+		return;
+
+	if (!list->num_entries) {
+		fprintf(stdout, "No QNAP boxes found.           \n");
+		return;
+	}
+
+	node = list->first;
+
+	while (node != NULL) {
+		count++;
+
+		fprintf(stdout, "%d)                         \n", count);
+		if (node->ntype == NODE_TYPE_BRIEF) {
+			parse_brief_response(node->msg, node->len, node->hostip);
+		} else if(node->ntype == NODE_TYPE_DETAIL)
+			parse_detail_response(node->msg, node->len, node->hostip);
+
+		node = node->next;
+	}
+}
+
 int main(int argc, char **argv)
 {
 	pthread_t recv_thread;
@@ -344,6 +420,10 @@ int main(int argc, char **argv)
 
 
 	D("-->main\n");
+
+
+	fprintf(stdout, "Looking for QNAP boxes...\r");
+	fflush(stdout);
 
 	response_list = create_list();
 
@@ -363,7 +443,11 @@ int main(int argc, char **argv)
 	send_msg(msg[0], SEND_MESG_LEN);
 
 	/* request detail packet */
-	send_msg(msg[2], SEND_MESG_LEN);
+	//send_msg(msg[2], SEND_MESG_LEN);
+
+	sleep(5);
+
+	send_done = TRUE;
 
 	if (pthread_join(recv_thread, NULL)) {
 		fprintf(stderr, "error joining thread recv_thread\n");
@@ -371,8 +455,7 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Process data here??? */
-
+	print_qnap_list(response_list);
 
 	ret = EXIT_SUCCESS;
 
