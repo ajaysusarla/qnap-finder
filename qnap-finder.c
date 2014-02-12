@@ -255,9 +255,9 @@ void *recv_func(void *arg)
 				free(node);
 			}
 
-			D("0x%llx:0x%llx\n",
-			  (unsigned long long)h.magic[0],
-			  (unsigned long long)h.magic[1]);
+			D(("0x%llx:0x%llx\n",
+			   (unsigned long long)h.magic[0],
+			   (unsigned long long)h.magic[1]));
 
 			add_tab[pos] = addr; /* Add to hash table */
 		}
@@ -375,7 +375,10 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	}
 	fprintf(stdout, "\n");
 
-	fprintf(stdout, "\tURL         : https:///\n");
+#if 0
+	fprintf(stdout, "\tURL         : https://%s/cgi-bin/login.html?%s\n",
+		hostip, "version");
+#endif
 
 	return;
 }
@@ -422,7 +425,7 @@ int main(int argc, char **argv)
 	D("-->main\n");
 
 
-	fprintf(stdout, "Looking for QNAP boxes...\r");
+	fprintf(stdout, "Looking for QNAP boxes.....\r");
 	fflush(stdout);
 
 	response_list = create_list();
