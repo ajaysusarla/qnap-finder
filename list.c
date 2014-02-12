@@ -31,6 +31,7 @@ LIST * create_list(void)
 	if (list) {
 		list->first = NULL;
 		list->last = NULL;
+		list->num_entries = 0;
 	}
 
 	return list;
@@ -94,6 +95,7 @@ int add_node(LIST *list, NODE *new)
 		list->last->next = NULL;
 	}
 
+	list->num_entries += 1;
 	ret = 0;
 
 end:

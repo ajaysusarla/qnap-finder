@@ -19,9 +19,17 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+/* Message type*/
+typedef enum {
+	NODE_TYPE_NONE,
+	NODE_TYPE_BRIEF,
+	NODE_TYPE_DETAIL
+} node_type_t;
+
 typedef struct _QnapResponseNode {
 	int len;
 	in_addr_t addr;
+	node_type_t ntype;
 	char *hostip;
 	char *msg;
 	struct _QnapResponseNode *next;
@@ -30,6 +38,7 @@ typedef struct _QnapResponseNode {
 typedef struct _NASBoxList {
 	NODE *first;
 	NODE *last;
+	int num_entries;
 } LIST;
 
 
