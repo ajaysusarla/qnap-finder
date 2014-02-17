@@ -448,8 +448,6 @@ int main(int argc, char **argv)
 	/* request detail packet */
 	//send_msg(msg[2], SEND_MESG_LEN);
 
-	sleep(5);
-
 	send_done = TRUE;
 
 	if (pthread_join(recv_thread, NULL)) {
