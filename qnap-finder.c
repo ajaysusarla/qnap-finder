@@ -68,6 +68,10 @@ int sendsock;
 int recvsock;
 LIST *response_list;
 
+int verbose = FALSE;
+int query_detail_info = FALSE;
+
+
 struct sockaddr_in broadcast_addr;
 int send_done = 0;
 
@@ -416,13 +420,82 @@ void print_qnap_list(LIST *list)
 	}
 }
 
+static void print_version(void)
+{
+	printf("qnap-finder v%s\n", VERSION_STRING);
+}
+
+static void print_help(void)
+{
+	print_version();
+
+	printf("\nUsage: qnap-finder [options]");
+	printf("\n\noptions include:");
+	printf("\n  --help|-h          This help text");
+	printf("\n  --detail|-d        Query for detailed information.(defailt is brief)");
+	printf("\n  --verbose|-v       Verbose debug");
+	printf("\n  --version|-V       Prints current version\n\n");
+}
+
+static void parse_argument(const char *arg)
+{
+	const char *p = arg+1;
+
+	do {
+		switch (*p) {
+		case 'd':
+			query_detail_info = TRUE;
+			continue;
+		case 'h':
+			print_help();
+			exit(EXIT_SUCCESS);
+		case 'v':
+			verbose = TRUE;
+			continue;
+		case 'V':
+			print_version();
+			exit(EXIT_SUCCESS);
+		case '-': /* long options */
+			if (strcmp(arg, "--detail") == 0) {
+				query_detail_info = TRUE;
+				return;
+			}
+			if (strcmp(arg, "--help") == 0) {
+				print_help();
+				exit(EXIT_SUCCESS);
+			}
+			if (strcmp(arg, "--verbose") == 0) {
+				verbose = TRUE;
+				return;
+			}
+			if (strcmp(arg, "--version") == 0) {
+				print_version();
+				exit(EXIT_SUCCESS);
+			}
+		default:
+			fprintf(stderr, "Bad argument '%s'\n", arg);
+			exit(1);
+		}
+	} while(*++p);
+}
+
 int main(int argc, char **argv)
 {
 	pthread_t recv_thread;
 	int ret;
+	int i;
 
 
 	D("-->main\n");
+
+	for (i = 1; i < argc; i++) {
+		const char *a = argv[i];
+
+		if (a[0] == '-') {
+			parse_argument(a);
+			continue;
+		}
+	}
 
 
 	fprintf(stdout, "Looking for QNAP boxes.....\r");
@@ -442,11 +515,15 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* request query packet */
-	send_msg(msg[0], SEND_MESG_LEN);
+	if (query_detail_info) {
+		/* request detail packet */
+		send_msg(msg[2], SEND_MESG_LEN);
 
-	/* request detail packet */
-	//send_msg(msg[2], SEND_MESG_LEN);
+	} else {
+		/* request brief packet */
+		send_msg(msg[0], SEND_MESG_LEN);
+	}
+
 
 	send_done = TRUE;
 

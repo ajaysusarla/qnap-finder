@@ -16,6 +16,8 @@
  *
  */
 
+#define VERSION_STRING "0.1"
+
 /* Request message */
 # define SEND_MESG_LEN 16
 char msg[][16] = {
