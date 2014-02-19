@@ -362,8 +362,8 @@ void net_fin(void)
 
 #define QNAP_FIELD_HOSTNAME  01
 
-#define QNAP_BRIEF_HOSTNAME_LEN 34
-#define QNAP_BRIEF_HOSTNAME     35
+#define QNAP_FIELD_BRIEF_HOSTNAME_LEN 34
+#define QNAP_FIELD_BRIEF_HOSTNAME     35
 
 void parse_brief_response(unsigned char *resp, int len, char *hostip)
 {
@@ -371,13 +371,13 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	char hostname[HOST_NAME_MAX] = { 0 };
 	int i;
 
-	hostname_len = resp[QNAP_BRIEF_HOSTNAME_LEN];
-	(void)memcpy(hostname, resp+QNAP_BRIEF_HOSTNAME, hostname_len);
+	hostname_len = resp[QNAP_FIELD_BRIEF_HOSTNAME_LEN];
+	(void)memcpy(hostname, resp+QNAP_FIELD_BRIEF_HOSTNAME, hostname_len);
 
 	fprintf(stdout, "\tHostname    : %s\n", hostname);
 	fprintf(stdout, "\tIP Address  : %s\n", hostip);
 
-	i = QNAP_BRIEF_HOSTNAME + hostname_len + 2;
+	i = QNAP_FIELD_BRIEF_HOSTNAME + hostname_len + 2;
 
 	fprintf(stdout, "\tType        : ");
 	while (1) {
@@ -533,6 +533,7 @@ int main(int argc, char **argv)
 		send_msg(msg[0], SEND_MESG_LEN);
 	}
 
+	sleep(3);
 
 	send_done = TRUE;
 
