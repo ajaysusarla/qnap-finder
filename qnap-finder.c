@@ -244,9 +244,8 @@ void *recv_func(void *arg)
 				} else {
 					D("\t\t-->Nothing?\n");
 				}
-			} else {
-				fprintf(stderr, "Not a QNAP response\n");
-			}
+			} else
+				D("Not a QNAP response\n");
 
 			if (node->ntype != NODE_TYPE_NONE) {
 				node->len = ret;
@@ -297,14 +296,14 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	/* Set broadcast on socket */
 	rv = setsockopt(sendsock, SOL_SOCKET, SO_BROADCAST, (void *)&bcast, sizeof(bcast));
 	if (rv < 0){
-		perror("setsockopt");
+		perror("setsockopt:SO_BROADCAST");
 return -1;
 	}
 
 	/* Disable loopback so that we don't receieve our own datagrams */
 	rv = setsockopt(sendsock, IPPROTO_IP, IP_MULTICAST_LOOP, (void *)&loop, sizeof(loop));
 	if (rv < 0){
-		perror("setsockopt");
+		perror("setsockopt:IP_MULTICAST_LOOP");
 		return -1;
 	}
 
@@ -432,7 +431,7 @@ static void print_help(void)
 	printf("\nUsage: qnap-finder [options]");
 	printf("\n\noptions include:");
 	printf("\n  --help|-h          This help text");
-	printf("\n  --detail|-d        Query for detailed information.(defailt is brief)");
+	printf("\n  --detail|-d        Query for detailed information.(default is brief)");
 	printf("\n  --verbose|-v       Verbose debug");
 	printf("\n  --version|-V       Prints current version\n\n");
 }
