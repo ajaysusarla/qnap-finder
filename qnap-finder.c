@@ -380,19 +380,26 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	i = QNAP_FIELD_BRIEF_HOSTNAME + hostname_len + 2;
 
 	fprintf(stdout, "\tType        : ");
-	while (1) {
+	while (i < len) {
 		fprintf(stdout, "%c", resp[i]);
 		i++;
-		if (resp[i] == 202 && resp[i+1] == 9) /* check for 0xca 0x09*/
+		if (resp[i] == 202 && resp[i+1] == 9) {/* check for 0xca 0x09*/
+			i+=2;
 			break;
+		}
 	}
 	fprintf(stdout, "\n");
 
 #if 0
-	fprintf(stdout, "\tURL         : https://%s/cgi-bin/login.html?%s\n",
-		hostip, "version");
+	while (i < len) {
+		fprintf(stdout, ">>> %d: %2x : %c\n", i, resp[i], resp[i]);
+		i++;
+	}
 #endif
+	fprintf(stdout, "\tURL         : https://%s/cgi-bin/login.html\n",
+		hostip);
 
+	fprintf(stdout, "\n");
 	return;
 }
 
