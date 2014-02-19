@@ -277,6 +277,7 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	int bcast = 1;
 	int loop = 1;
 	struct sockaddr_in si_me;
+	struct timeval tv;
 
 	D("-->net_init\n");
 
@@ -317,14 +318,23 @@ return -1;
 	/* Set broadcast on socket */
 	rv = setsockopt(recvsock, SOL_SOCKET, SO_BROADCAST, (void *)&bcast, sizeof(bcast));
 	if (rv < 0){
-		perror("setsockopt");
+		perror("setsockopt:SO_BROADCAST");
 		return -1;
 	}
 
 	/* Disable loopback so that we don't receieve our own datagrams */
 	rv = setsockopt(recvsock, IPPROTO_IP, IP_MULTICAST_LOOP, (void *)&loop, sizeof(loop));
 	if (rv < 0){
-		perror("setsockopt");
+		perror("setsockopt:IP_MULTICAST_LOOP");
+		return -1;
+	}
+
+	/* Time out on recv socket */
+	tv.tv_sec = 30;  /* 30 Secs Timeout */
+	tv.tv_usec = 0;
+	rv = setsockopt(recvsock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval));
+	if (rv < 0){
+		perror("setsockopt:SO_RCVTIMEO");
 		return -1;
 	}
 
