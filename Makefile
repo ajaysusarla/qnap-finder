@@ -1,14 +1,30 @@
+# Platform
+CC=gcc
+DEBUG=-ggdb
+CFLAGS=-Wall -Wno-pointer-sign $(DEBUG)
+LDFLAGS=
+NULL=
+
+UNAME := $(shell $(CC) -dumpmachine 2>&1 | grep -E -o "linux|darwin")
+
+ifeq ($(UNAME), darwin)
+        OSSUPPORT = darwin
+        OSSUPPORT_CFLAGS += -DDARWIN
+endif
+
+CFLAGS += $(OSSUPPORT_CFLAGS)
+LDFLAGS += -lpthread -lm
+
 all: qnap-finder
 
-
 qnap-finder.o: qnap-finder.c qnap-finder.h
-	gcc -Wall -ggdb -c -o qnap-finder.o qnap-finder.c
+	$(CC) $(CFLAGS) -c -o qnap-finder.o qnap-finder.c
 
 list.o: list.c list.h
-	gcc -Wall -ggdb -c -o list.o list.c
+	$(CC) $(CFLAGS) -c -o list.o list.c
 
 qnap-finder: qnap-finder.o list.o
-	gcc -Wall -ggdb -o qnap-finder qnap-finder.o list.o -lpthread -lm
+	$(CC) $(CFLAGS) -o qnap-finder qnap-finder.o list.o $(LDFLAGS)
 
 clean:
 	rm -f *.o qnap-finder
