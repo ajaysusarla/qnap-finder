@@ -51,6 +51,11 @@
 #define FALSE 0
 #define TRUE  1
 
+
+#ifndef _POSIX_HOST_NAME_MAX
+#define _POSIX_HOST_NAME_MAX 255
+#endif
+
 /* QNAP Response */
 struct qnap_response_hdr {
 	uint64_t magic[2];
@@ -368,7 +373,7 @@ void net_fin(void)
 void parse_brief_response(unsigned char *resp, int len, char *hostip)
 {
 	int hostname_len;
-	char hostname[HOST_NAME_MAX] = { 0 };
+	char hostname[_POSIX_HOST_NAME_MAX] = { 0 };
 	int i;
 
 	hostname_len = resp[QNAP_FIELD_BRIEF_HOSTNAME_LEN];
