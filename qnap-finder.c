@@ -33,8 +33,6 @@
 #include "qnap-finder.h"
 #include "list.h"
 
-//#define DEBUG
-
 #ifdef DEBUG
 #define D(x) printf(x)
 #else
@@ -98,8 +96,14 @@ static uint16_t _data_to_le2(uint16_t in)
 	uint8_t *s = (uint8_t *)(void *)&in;
 	uint8_t *d = (uint8_t *)(void *)&out;
 
+	if (verbose)
+		printf("-->_data_to_le2\n");
+
 	d[0] = s[1];
 	d[1] = s[0];
+
+	if (verbose)
+		printf("<--_data_to_le2\n");
 
 	return out;
 }
@@ -111,10 +115,16 @@ static uint32_t _data_to_le4(uint32_t in)
 	uint8_t *s = (uint8_t *)(void *)&in;
 	uint8_t *d = (uint8_t *)(void *)&out;
 
+	if (verbose)
+		printf("-->_data_to_le4\n");
+
 	d[0] = s[3];
 	d[1] = s[2];
 	d[2] = s[1];
 	d[3] = s[0];
+
+	if (verbose)
+		printf("<--_data_to_le4\n");
 
 	return out;
 }
@@ -126,6 +136,9 @@ static uint64_t _data_to_le8(uint64_t in)
 	uint8_t *s = (uint8_t *)(void *)&in;
 	uint8_t *d = (uint8_t *)(void *)&out;
 
+	if (verbose)
+		printf("-->_data_to_le8\n");
+
 	d[0] = s[7];
 	d[1] = s[6];
 	d[2] = s[5];
@@ -134,6 +147,9 @@ static uint64_t _data_to_le8(uint64_t in)
 	d[5] = s[2];
 	d[6] = s[1];
 	d[7] = s[0];
+
+	if (verbose)
+		printf("-->_data_to_le8\n");
 
 	return out;
 }
@@ -148,7 +164,9 @@ int get_and_stash_local_ip_addr(void)
 {
 	struct ifaddrs *ifaddr, *ifa;
 
-	D("-->get_and_stash_local_ip_addr\n");
+	if (verbose)
+		printf("-->get_and_stash_local_ip_addr\n");
+
 	if (getifaddrs(&ifaddr) == -1) {
 		perror("getifaddrs");
 		return -1;
@@ -172,19 +190,25 @@ int get_and_stash_local_ip_addr(void)
 
 	freeifaddrs(ifaddr);
 
-	D("-->exit get_and_stash_local_ip_addr\n");
+	if (verbose)
+		printf("<--get_and_stash_local_ip_addr\n");
 	return 0;
 }
 
 int send_msg(char *data, int len)
 {
 	int num;
-	D("-->send_msg\n");
+
+	if (verbose)
+		printf("-->send_msg\n");
 	num = sendto(sendsock, data, len, 0,
 		     (struct sockaddr *)&broadcast_addr,
 		     sizeof(broadcast_addr));
 
-	D("-->exit send_msg\n");
+
+	if (verbose)
+		printf("<--send_msg\n");
+
 	if (num != len) {
 		perror("sendto");
 		return -1;
@@ -201,7 +225,8 @@ void *recv_func(void *arg)
 	socklen_t fromsockaddrsize;
 	int ret;
 
-	D("-->recv_func\n");
+	if (verbose)
+		printf("-->recv_func\n");
 
 	(void)memcpy(endian_data.s, "\01\02\03\04", 4);
 
@@ -220,7 +245,9 @@ void *recv_func(void *arg)
 		node = create_node();
 		node->ntype = NODE_TYPE_NONE;
 
-		D("\t-->recvfrom\n");
+		if (verbose)
+			printf("\t-->recvfrom\n");
+
 		ret = recvfrom(recvsock, data, MAX_PACKET_SIZE, 0,
 			       fromsockaddr, &fromsockaddrsize);
 
@@ -241,16 +268,21 @@ void *recv_func(void *arg)
 
 			if (h.magic[0] == QNAP_MAGIC1) {
 				if (h.magic[1] == QNAP_MAGIC2) {
-					D("\t\t-->It is a Query reponse.\n");
+					if (verbose)
+						printf("\t\t-->It is a Query reponse.\n");
 					node->ntype = NODE_TYPE_BRIEF;
 				} else if (h.magic[1] == QNAP_MAGIC3) {
-					D("\t\t-->It is a Detail reponse.\n");
+					if (verbose)
+						printf("\t\t-->It is a Detail reponse.\n");
 					node->ntype = NODE_TYPE_BRIEF;
 				} else {
-					D("\t\t-->Nothing?\n");
+					if (verbose)
+						printf("\t\t-->Nothing?\n");
 				}
-			} else
-				D("Not a QNAP response\n");
+			} else {
+				if (verbose)
+					printf("Not a QNAP response\n");
+			}
 
 			if (node->ntype != NODE_TYPE_NONE) {
 				node->len = ret;
@@ -263,15 +295,17 @@ void *recv_func(void *arg)
 				free(node);
 			}
 
-			D(("0x%llx:0x%llx\n",
-			   (unsigned long long)h.magic[0],
-			   (unsigned long long)h.magic[1]));
+			if (verbose)
+				printf("Magic: 0x%llx:0x%llx\n",
+				       (unsigned long long)h.magic[0],
+				       (unsigned long long)h.magic[1]);
 
 			add_tab[pos] = addr; /* Add to hash table */
 		}
 	}
 
-	D("-->exit recv_func\n");
+	if (verbose)
+		printf("<--recv_func\n");
 
 	return NULL;
 }
@@ -284,7 +318,8 @@ int net_init(char *broadcast_ip, unsigned short broadcast_port)
 	struct sockaddr_in si_me;
 	struct timeval tv;
 
-	D("-->net_init\n");
+	if (verbose)
+		printf("-->net_init\n");
 
 	/** Sending socket **/
 	sendsock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -349,19 +384,22 @@ return -1;
 	si_me.sin_addr.s_addr = INADDR_ANY;
 	bind(recvsock, (struct sockaddr *)&si_me, sizeof(struct sockaddr));
 
-	D("-->exit net_init\n");
+	if (verbose)
+		printf("<--net_init\n");
 	return 0;
 }
 
 void net_fin(void)
 {
-	D("-->net_fin\n");
+	if (verbose)
+		printf("-->net_fin\n");
 	if (sendsock >= 0)
 		close(sendsock);
 	if (recvsock >= 0)
 		close(recvsock);
 
-	D("-->exit net_fin\n");
+	if (verbose)
+		printf("<--net_fin\n");
 }
 
 
@@ -375,6 +413,9 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	int hostname_len;
 	char hostname[_POSIX_HOST_NAME_MAX] = { 0 };
 	int i;
+
+	if (verbose)
+		printf("-->parse_brief_response\n");
 
 	hostname_len = resp[QNAP_FIELD_BRIEF_HOSTNAME_LEN];
 	(void)memcpy(hostname, resp+QNAP_FIELD_BRIEF_HOSTNAME, hostname_len);
@@ -405,11 +446,19 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 		hostip);
 
 	fprintf(stdout, "\n");
+
+	if (verbose)
+		printf("<--parse_brief_response\n");
 	return;
 }
 
 void parse_detail_response(unsigned char *resp, int len, char *hostip)
 {
+	if (verbose)
+		printf("-->parse_detail_response\n");
+
+	if (verbose)
+		printf("<--parse_detail_response\n");
 	return;
 }
 
@@ -417,6 +466,9 @@ void print_qnap_list(LIST *list)
 {
 	NODE *node;
 	int count = 0;
+
+	if (verbose)
+		printf("-->print_qnap_list\n");
 
 	if (!list)
 		return;
@@ -439,6 +491,10 @@ void print_qnap_list(LIST *list)
 
 		node = node->next;
 	}
+
+	if (verbose)
+		printf("<--print_qnap_list\n");
+
 }
 
 static void print_version(void)
@@ -461,6 +517,9 @@ static void print_help(void)
 static void parse_argument(const char *arg)
 {
 	const char *p = arg+1;
+
+	if (verbose)
+		printf("-->parse_argument\n");
 
 	do {
 		switch (*p) {
@@ -498,6 +557,9 @@ static void parse_argument(const char *arg)
 			exit(1);
 		}
 	} while(*++p);
+
+	if (verbose)
+		printf("<--parse_argument\n");
 }
 
 int main(int argc, char **argv)
@@ -507,8 +569,6 @@ int main(int argc, char **argv)
 	int i;
 
 
-	D("-->main\n");
-
 	for (i = 1; i < argc; i++) {
 		const char *a = argv[i];
 
@@ -517,6 +577,9 @@ int main(int argc, char **argv)
 			continue;
 		}
 	}
+
+	if (verbose)
+		printf("-->main\n");
 
 
 	fprintf(stdout, "Looking for QNAP boxes.....\r");
@@ -563,7 +626,8 @@ cleanup:
 	net_fin();
 	free_list(response_list);
 
-	D("-->exit main\n");
+	if (verbose)
+		printf("<--main\n");
 	exit(ret);
 
 }
