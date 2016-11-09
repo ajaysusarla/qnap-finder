@@ -405,8 +405,8 @@ void net_fin(void)
 
 #define QNAP_FIELD_HOSTNAME  01
 
-#define QNAP_FIELD_BRIEF_HOSTNAME_LEN 34
-#define QNAP_FIELD_BRIEF_HOSTNAME     35
+#define QNAP_FIELD_BRIEF_HOSTNAME_LEN 33
+#define QNAP_FIELD_BRIEF_HOSTNAME     34
 
 void parse_brief_response(unsigned char *resp, int len, char *hostip)
 {
@@ -414,6 +414,15 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	char hostname[_POSIX_HOST_NAME_MAX] = { 0 };
 	int i;
 
+
+#if 0
+        i = 0;
+	while (i < len) {
+		fprintf(stdout, ">>> %d: %2x : %c\n", i, resp[i], resp[i]);
+		i++;
+	}
+        return;
+#endif
 	if (verbose)
 		printf("-->parse_brief_response\n");
 
@@ -436,12 +445,6 @@ void parse_brief_response(unsigned char *resp, int len, char *hostip)
 	}
 	fprintf(stdout, "\n");
 
-#if 0
-	while (i < len) {
-		fprintf(stdout, ">>> %d: %2x : %c\n", i, resp[i], resp[i]);
-		i++;
-	}
-#endif
 	fprintf(stdout, "\tURL         : https://%s/cgi-bin/login.html\n",
 		hostip);
 
