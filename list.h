@@ -21,24 +21,24 @@
 
 /* Message type*/
 typedef enum {
-	NODE_TYPE_NONE,
-	NODE_TYPE_BRIEF,
-	NODE_TYPE_DETAIL
+        NODE_TYPE_NONE,
+        NODE_TYPE_BRIEF,
+        NODE_TYPE_DETAIL
 } node_type_t;
 
 typedef struct _QnapResponseNode {
-	int len;
-	in_addr_t addr;
-	node_type_t ntype;
-	char *hostip;
-	unsigned char *msg;
-	struct _QnapResponseNode *next;
+        int len;
+        in_addr_t addr;
+        node_type_t ntype;
+        char *hostip;
+        unsigned char *msg;
+        struct _QnapResponseNode *next;
 } NODE;
 
 typedef struct _NASBoxList {
-	NODE *first;
-	NODE *last;
-	int num_entries;
+        NODE *first;
+        NODE *last;
+        int num_entries;
 } LIST;
 
 

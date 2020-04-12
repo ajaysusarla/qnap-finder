@@ -25,80 +25,80 @@
 
 LIST * create_list(void)
 {
-	LIST *list;
+        LIST *list;
 
-	list = (LIST *)malloc(sizeof(LIST));
-	if (list) {
-		list->first = NULL;
-		list->last = NULL;
-		list->num_entries = 0;
-	}
+        list = (LIST *)malloc(sizeof(LIST));
+        if (list) {
+                list->first = NULL;
+                list->last = NULL;
+                list->num_entries = 0;
+        }
 
-	return list;
+        return list;
 }
 
 void free_list(LIST *list)
 {
-	if (list) {
-		NODE *tmp, *prev;
+        if (list) {
+                NODE *tmp, *prev;
 
-		tmp = list->first;
-		while (tmp != NULL) {
-			prev = tmp;
-			tmp = tmp->next;
+                tmp = list->first;
+                while (tmp != NULL) {
+                        prev = tmp;
+                        tmp = tmp->next;
 
-			if (prev->hostip)
-				free(prev->hostip);
-			if (prev->msg)
-				free(prev->msg);
-			free(prev);
-		}
-		free(tmp);
-		list->first = NULL;
-		list->last = NULL;
+                        if (prev->hostip)
+                                free(prev->hostip);
+                        if (prev->msg)
+                                free(prev->msg);
+                        free(prev);
+                }
+                free(tmp);
+                list->first = NULL;
+                list->last = NULL;
 
-		free(list);
-	}
+                free(list);
+        }
 }
 
 NODE * create_node(void)
 {
-	NODE *node;
+        NODE *node;
 
-	node = (NODE *)malloc(sizeof(NODE));
-	if (node) {
-		node->len = 0;
-		node->hostip = NULL;
-		node->msg = NULL;
-		node->next = NULL;
-	}
+        node = (NODE *)malloc(sizeof(NODE));
+        if (node) {
+                node->len = 0;
+                node->hostip = NULL;
+                node->msg = NULL;
+                node->next = NULL;
+        }
 
-	return node;
+        return node;
 }
 
 int add_node(LIST *list, NODE *new)
 {
-	int ret;
+        int ret;
 
-	if (!list || !new) {
-		ret = -1;
-		goto end;
-	}
+        if (!list || !new) {
+                ret = -1;
+                goto end;
+        }
 
-	if (list->first == list->last &&
-	    list->last == NULL) {
-		list->first = list->last = new;
-		list->first->next = NULL;
-		list->last->next = NULL;
-	} else {
-		list->last->next = new;
-		list->last = new;
-		list->last->next = NULL;
-	}
+        if (list->first == list->last &&
+            list->last == NULL) {
+                list->first = list->last = new;
+                list->first->next = NULL;
+                list->last->next = NULL;
+        } else {
+                list->last->next = new;
+                list->last = new;
+                list->last->next = NULL;
+        }
 
-	list->num_entries += 1;
-	ret = 0;
+        list->num_entries += 1;
+        ret = 0;
 
 end:
-	return ret;
+        return ret;
 }
